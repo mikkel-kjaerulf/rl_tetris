@@ -8,6 +8,7 @@ import numpy as np
 import random
 import os
 from enum import Enum
+import random
 
 # stable baselines3
 from stable_baselines3 import PPO
@@ -36,8 +37,9 @@ class PuzzlePiece():
         return self.pos
 
 class Z(PuzzlePiece):
-    def __init__(self, mirrored):
+    def __init__(self):
         super().__init__()
+        mirrored = random.choice((False, True))
         if mirrored:
             self.shape = np.array([[1, 1, 0],
                           [0, 1, 1]])
@@ -47,8 +49,9 @@ class Z(PuzzlePiece):
         self.init_pos()
 
 class L(PuzzlePiece):
-    def __init__(self, mirrored):
+    def __init__(self):
         super().__init__()
+        mirrored = random.choice((False, True))
         if mirrored:
             self.shape = np.array([[0, 1],
                                    [0, 1],
@@ -77,11 +80,34 @@ class S(PuzzlePiece):
 class Board():
     def __init__(self) -> None:
         self.board = np.zeros((20,10))
-        self.active_piece = 
+        puzzle_pieces = (Z, S, T, L)
+        self.active_piece = Z()
+        self.locked_positions = []
         
-    def add_piece(self, tetromino):
-        for position in tetromino.Position:
-            self.board[position] = 1
+    def lock_active_piece(self, tetromino):
+        self.locked_positions.append(self.active_piece.pos)
+        self.new_piece()
+    
+    def move_right(self):
+        self.clear_board()
+        for pos in self.active_piece.Position:
+            if pos[0] + 1 < 0 or self.board[pos[0] + 1, pos[1]] == 1:
+                return
+        self.active_piece = [(position[0] + 1, position[1]) for position in self.active_piece.Position]
+        self.draw_active_piece()
+
+    def new_piece(self):
+        self.active_piece = random.choice([Z(False), Z(True), L(False), L(True), T(), S()])
+
+    def draw_active_piece(self):
+        for pos in self.active_piece.Position:
+            self.board[pos] = 1
+
+    def clear_board(self):
+        self.board = np.zeros((20,10))
+        for pos in self.locked_positions:
+            self.board[pos] = 1
+
     
     @property
     def State(self):
@@ -95,13 +121,17 @@ class PuzzleEnv(Env):
         # rotate left | rotate right | move left | move right | move down | throw 
         self.action_space = Discrete(6)
         self.observation_space = Box(0,1, shape=(20, 10), dtype=np.int8)
-        self.state = Board()
+        self.board = Board()
+    
+    def step(self, action):
+        self.done = False
+
 
     def render(self, mode='human'):
-        self.state.add_piece(L(mirrored=True))
-        print(self.state.State)
+        self.board.move_right()
+        print(self.board.State)
 
 
     def get_state(self):
-        return self.state
+        return self.board
 
