@@ -9,6 +9,7 @@ import random
 import os
 from enum import Enum
 import random
+import pygame
 
 # stable baselines3
 from stable_baselines3 import PPO
@@ -32,7 +33,11 @@ class PuzzlePiece():
         self.pos_shape = np.array([(self.pos[0] + j, self.pos[1] + i - 1) for i in range(self.shape.shape[1]) for j in range(self.shape.shape[0]) if (self.shape[j,i] == 1)])
     
     def __updatePosition__(self, newposition):
-        self.pos_shape = newposition
+        self.pos = newposition
+        self.__updatePositionShape__()
+    
+    def __setShape__(self, newshape):
+        self.shape = newshape
         self.__updatePositionShape__()
 
     @property
@@ -42,10 +47,13 @@ class PuzzlePiece():
     @property
     def PositionShape(self):
         return self.pos_shape
+    
+    @property
+    def Shape(self):
+        return self.shape
 
 
 class Board():
-
     def __init__(self) -> None:
         self.height = 20
         self.width = 10
@@ -57,47 +65,60 @@ class Board():
         self.locked_positions.append(self.active_piece.pos)
         self.new_piece()
     
-    def move_right(self):
+    def move(self, dir):
+        if dir == 'right':
+            direction = (0, 1)
+        elif dir == 'left':
+            direction = (0, -1)
+        elif dir == 'down':
+            direction = (1, 0)
         self.reset_board()
-        for pos in self.active_piece.PositionShape:
-            if self.board[pos[0], pos[1] + 1] == 1:
-                return
-        self.active_piece.__updatePosition__((self.active_piece.Position[0], self.active_piece.Position[1] + 1))
+        self.active_piece.__updatePosition__(tuple(map(lambda i, j: i + j, self.active_piece.Position, direction)))
+        if self.check_collision() == True:
+            self.active_piece.__updatePosition__(tuple(map(lambda i, j: i - j, self.active_piece.Position, direction)))
         self.place_active_piece()
     
-    def move_left(self):
+    def rotate(self, dir):
         self.reset_board()
-        for pos in self.active_piece.PositionShape:
-            if self.board[pos[0], pos[1] - 1] == 1 or pos[1] - 1 < 0:
-                return
-        self.active_piece.__setpos__(np.array([(position[0], position[1] - 1) for position in self.active_piece.Position]))
-        self.place_active_piece()
-    
-    def move_down(self):
-        self.reset_board()
-        for pos in self.active_piece.PositionShape:
-            if self.board[pos[0] + 1, pos[0]] == 1 or pos[0] + 1 >= self.height:
-                return
-        self.active_piece.__setpos__([(position[0] + 1, position[1]) for position in self.active_piece.Position])
-        self.place_active_piece()
-    
-    def rotate_right(self):
-        self.reset_board()
-        self.active_piece.__setpos__ = np.array([])
+        if dir == 'right':
+            k = 1
+        elif dir == 'left':
+            k = 3
+        self.active_piece.__setShape__(np.rot90(self.active_piece.Shape, k=k))
+        if self.check_collision() == True:
+            self.active_piece.__setShape__(np.rot(self.active_piece.Shape, k=4-k))
         self.place_active_piece()
 
+    def check_collision(self) -> bool:
+        for pos in self.active_piece.PositionShape:
+            if self.board[pos[0], pos[0]] == 1 or pos[0]>= self.height or pos[0] < 0 or pos[1] >= self.height or pos[1] < 0:
+                return True
+        return False
 
     def new_piece(self):
         self.active_piece = PuzzlePiece()
 
     def place_active_piece(self):
-        for pos in self.active_piece.Position:
-            self.board[pos] = 1
+        for pos in self.active_piece.PositionShape:
+            self.board[pos[0], pos[1]] = 1
 
     def reset_board(self):
         self.board = np.zeros((20,10))
         for pos in self.locked_positions:
             self.board[pos] = 1
+    
+    def check_and_collapse_lines(self):
+        full_lines = []
+        for i in range(self.height):
+            if np.all(self.board[i, :] == 1):
+                full_lines.append(i)
+
+        if full_lines:
+            # Remove the full lines and shift the upper lines down
+            self.board = np.delete(self.board, full_lines, axis=0)
+            new_lines = np.zeros((len(full_lines), self.width))
+            self.board = np.concatenate((new_lines, self.board), axis=0)
+            self.locked_positions = [(pos[0] + len(full_lines), pos[1]) for pos in self.locked_positions]
     
     @property
     def State(self):
@@ -127,10 +148,43 @@ class PuzzleEnv(Env):
         self.done = False
 
 
-    def render(self, mode='human'):
-        self.board.move_right()
-        self.board.move_right()
-        print(self.board.State)
+    def render(self, render_mode='t'):
+        if render_mode == 'human':
+            pygame.init()
+            clock = pygame.time.Clock()
+            screen_width = self.board.width * 30
+            screen_height = self.board.height * 30
+            screen = pygame.display.set_mode((screen_width, screen_height))
+            pygame.display.set_caption("Tetris")
+
+            done = False
+            while not done:
+                screen.fill((0, 0, 0))
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        done = True
+                        break
+
+                self.board.move('right')
+                self.board.move('down')
+                self.board.move('down')
+                self.board.rotate('left')
+                
+                for i in range(self.board.height):
+                    for j in range(self.board.width):
+                        if self.board.State[i, j] == 1:
+                            pygame.draw.rect(screen, (255, 255, 255), (j * 30, i * 30, 30, 30))
+
+                pygame.display.flip()
+                clock.tick(30)  # Adjust the frame rate if needed
+
+            pygame.quit()
+        else:
+            self.board.move('right')
+            self.board.move('down')
+            self.board.move('down')
+            self.board.rotate('left')
+            print(self.board.State)
 
 
     def get_state(self):
