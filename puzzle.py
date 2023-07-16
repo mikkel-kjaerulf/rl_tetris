@@ -10,11 +10,19 @@ import os
 from enum import Enum
 import random
 import pygame
+import math
 
 # stable baselines3
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 
+class Actions(Enum):
+        RotateLeft = 0
+        RotateRight = 1
+        MoveLeft = 2
+        MoveRight = 3
+        MoveDown = 4
+        Nothing = 5
 
 
 class PuzzlePiece():
@@ -57,12 +65,12 @@ class Board():
     def __init__(self) -> None:
         self.height = 20
         self.width = 10
-        self.board = np.zeros((self.height,self.width))
+        self.field = np.zeros((self.height,self.width))
         self.active_piece = PuzzlePiece()
         self.locked_positions = []
         
     def lock_active_piece(self, tetromino):
-        self.locked_positions.append(self.active_piece.pos)
+        self.locked_positions.append(self.active_piece.PositionShape)
         self.new_piece()
     
     def move(self, dir):
@@ -91,51 +99,45 @@ class Board():
 
     def check_collision(self) -> bool:
         for pos in self.active_piece.PositionShape:
-            if self.board[pos[0], pos[0]] == 1 or pos[0]>= self.height or pos[0] < 0 or pos[1] >= self.height or pos[1] < 0:
+            if self.field[pos[0], pos[0]] == 1 or pos[0]>= self.height or pos[0] < 0 or pos[1] >= self.height or pos[1] < 0:
                 return True
         return False
 
-    def new_piece(self):
+    def new_piece(self) -> bool:
         self.active_piece = PuzzlePiece()
+        return self.check_collision()
 
     def place_active_piece(self):
         for pos in self.active_piece.PositionShape:
-            self.board[pos[0], pos[1]] = 1
+            self.field[pos[0], pos[1]] = 1
 
     def reset_board(self):
-        self.board = np.zeros((20,10))
+        self.field = np.zeros((20,10))
         for pos in self.locked_positions:
-            self.board[pos] = 1
+            self.field[pos] = 1
     
-    def check_and_collapse_lines(self):
+    def check_and_collapse_lines(self) -> int:
         full_lines = []
         for i in range(self.height):
-            if np.all(self.board[i, :] == 1):
+            if np.all(self.field[i, :] == 1):
                 full_lines.append(i)
 
         if full_lines:
             # Remove the full lines and shift the upper lines down
-            self.board = np.delete(self.board, full_lines, axis=0)
+            self.field = np.delete(self.field, full_lines, axis=0)
             new_lines = np.zeros((len(full_lines), self.width))
-            self.board = np.concatenate((new_lines, self.board), axis=0)
+            self.field = np.concatenate((new_lines, self.field), axis=0)
             self.locked_positions = [(pos[0] + len(full_lines), pos[1]) for pos in self.locked_positions]
+        
+        return len(full_lines) / self.width
     
     @property
     def State(self):
-        return self.board
+        return self.field
     
 
 
 class PuzzleEnv(Env):
-
-    class Actions(Enum):
-        RotateLeft = 0
-        RotateRight = 1
-        MoveLeft = 2
-        MoveRight = 3
-        MoveDown = 4
-        Throw = 5
-
 
     def __init__(self):
         # action space 
@@ -143,10 +145,35 @@ class PuzzleEnv(Env):
         self.action_space = Discrete(6)
         self.observation_space = Box(0,1, shape=(20, 10), dtype=np.int8)
         self.board = Board()
+        self.done = False
+    
+    def reset(self):
+        self.done = False
+        self.board = Board()
     
     def step(self, action):
-        self.done = False
+        step_reward = 0
+        if (action == Actions.MoveRight.value):
+            self.board.move('right')
+        if (action == Actions.MoveLeft.value):
+            self.board.move('left')
+        if (action == Actions.RotateLeft.value):
+            self.board.rotate('left')
+        if (action == Actions.RotateRight.value):
+            self.board.rotate('right')
 
+        self.board.move('down')
+
+        if self.board.check_collision() == True:
+            self.board.lock_active_piece()
+            step_reward += 1
+            if self.board.new_piece() == True:
+                self.done = True
+        
+        step_reward += math.pow(10, self.board.check_and_collapse_lines())
+        observation = self.get_state()
+
+        return observation, step_reward, self.done, {"Step Reward": step_reward}
 
     def render(self, render_mode='t'):
         if render_mode == 'human':
@@ -186,7 +213,6 @@ class PuzzleEnv(Env):
             self.board.rotate('left')
             print(self.board.State)
 
-
     def get_state(self):
-        return self.board
+        return self.board.field
 
