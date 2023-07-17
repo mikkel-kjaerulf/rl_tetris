@@ -26,8 +26,9 @@ class Actions(Enum):
 
 
 class PuzzlePiece():
-    def __init__(self):
+    def __init__(self, seed=0):
         self.pos = (0,5)
+        random.seed(seed)
         self.shape = random.choice((
     np.array([[1, 1, 0],[0, 1, 1]]),
     np.array([[0, 1, 1],[1, 1, 0]]),
@@ -62,7 +63,8 @@ class PuzzlePiece():
 
 
 class Board():
-    def __init__(self) -> None:
+    def __init__(self, seed=0) -> None:
+        self.seed = seed
         self.height = 20
         self.width = 10
         self.field = np.zeros((self.height,self.width))
@@ -108,7 +110,7 @@ class Board():
         return False
 
     def new_piece(self) -> bool:
-        self.active_piece = PuzzlePiece()
+        self.active_piece = PuzzlePiece(self.seed)
         return not self.check_collision()
 
     def place_active_piece(self):
@@ -150,9 +152,10 @@ class PuzzleEnv(gym.Env):
         self.done = False
         self.tick_rate = 60
     
-    def reset(self):
+    def reset(self, seed : int):
         self.done = False
         self.board = Board()
+        return self.get_state()
     
     def step(self, action):
         self.done = False

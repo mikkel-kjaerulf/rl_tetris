@@ -1,5 +1,5 @@
 import unittest
-import environment.src.puzzle_env as puzzle_env
+import src.puzzle_env as puzzle_env
 
 class TestTetris(unittest.TestCase):
 
@@ -15,6 +15,7 @@ class TestTetris(unittest.TestCase):
         t.step(3)
         t.step(0)
         t.render("terminal")
+        t.reset(seed=10)
 
 
 if __name__ == '__main__':
