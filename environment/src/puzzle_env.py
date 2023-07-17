@@ -38,7 +38,7 @@ class PuzzlePiece():
         self.__updatePositionShape__()
 
     def __updatePositionShape__(self):
-        self.pos_shape = np.array([(self.pos[0] + j, self.pos[1] + i - 1) for i in range(self.shape.shape[1]) for j in range(self.shape.shape[0]) if (self.shape[j,i] == 1)])
+        self.pos_shape = np.array([[self.pos[0] + j, self.pos[1] + i - 1] for i in range(self.shape.shape[1]) for j in range(self.shape.shape[0]) if (self.shape[j,i] == 1)])
     
     def __updatePosition__(self, newposition):
         self.pos = newposition
@@ -67,13 +67,14 @@ class Board():
         self.width = 10
         self.field = np.zeros((self.height,self.width))
         self.active_piece = PuzzlePiece()
-        self.locked_positions = []
+        self.locked_positions = np.array([[0,0]])
         
     def lock_active_piece(self):
-        self.locked_positions.append(self.active_piece.PositionShape)
+        self.locked_positions = np.concatenate((self.locked_positions,self.active_piece.PositionShape))
         self.new_piece()
     
-    def move(self, dir):
+    def move(self, dir) -> bool:
+        move_allowed = True
         if dir == 'right':
             direction = (0, 1)
         elif dir == 'left':
@@ -84,8 +85,10 @@ class Board():
         self.active_piece.__updatePosition__(tuple(map(lambda i, j: i + j, self.active_piece.Position, direction)))
         if self.check_collision() == True:
             self.active_piece.__updatePosition__(tuple(map(lambda i, j: i - j, self.active_piece.Position, direction)))
+            move_allowed = False
         self.place_active_piece()
-    
+        return move_allowed
+
     def rotate(self, dir):
         self.reset_board()
         if dir == 'right':
@@ -98,6 +101,7 @@ class Board():
         self.place_active_piece()
 
     def check_collision(self) -> bool:
+        self.reset_board()
         for pos in self.active_piece.PositionShape:
             if pos[0]>= self.height or pos[0] < 0 or pos[1] >= self.width or pos[1] < 0 or self.field[pos[0], pos[1]] == 1:
                 return True
@@ -114,7 +118,7 @@ class Board():
     def reset_board(self):
         self.field = np.zeros((20,10))
         for pos in self.locked_positions:
-            self.field[pos] = 1
+            self.field[pos[0], pos[1]] = 1
     
     def check_and_collapse_lines(self) -> int:
         full_lines = []
@@ -135,7 +139,7 @@ class Board():
     def State(self):
         return self.field
 
-class PuzzleEnv(Env):
+class PuzzleEnv(gym.Env):
 
     def __init__(self):
         # action space 
@@ -144,6 +148,7 @@ class PuzzleEnv(Env):
         self.observation_space = Box(0,1, shape=(20, 10), dtype=np.int8)
         self.board = Board()
         self.done = False
+        self.tick_rate = 60
     
     def reset(self):
         self.done = False
@@ -160,46 +165,38 @@ class PuzzleEnv(Env):
             self.board.rotate('left')
         if (action == Actions.RotateRight.value):
             self.board.rotate('right')
-
-        self.board.move('down')
-
-        if self.board.check_collision() == True:
+        self.__render__()
+        if self.board.move('down') == False:
             self.board.lock_active_piece()
             step_reward += 1
             if self.board.new_piece() == False:
                 self.done = True
-        
+        self.__render__()
         step_reward += math.pow(10, self.board.check_and_collapse_lines())
         observation = self.get_state()
 
         return observation, step_reward, self.done, {"Step Reward": step_reward}
 
-    def render(self, render_mode="none"):
-        if render_mode == 'human':
-            pygame.init()
-            clock = pygame.time.Clock()
-            screen_width = self.board.width * 30
-            screen_height = self.board.height * 30
-            screen = pygame.display.set_mode((screen_width, screen_height))
-            pygame.display.set_caption("Tetris")
-
-            done = False
-            while not done:
-                screen.fill((0, 0, 0))
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        done = True
-                        break
-                
-                for i in range(self.board.height):
+    def __render__(self):
+        if self.render_mode == "human":
+            self.screen.fill((0, 0, 0))
+            for i in range(self.board.height):
                     for j in range(self.board.width):
                         if self.board.State[i, j] == 1:
-                            pygame.draw.rect(screen, (255, 255, 255), (j * 30, i * 30, 30, 30))
+                            pygame.draw.rect(self.screen, (255, 255, 255), (j * 30, i * 30, 30, 30))
+            pygame.display.flip()
+            self.clock.tick(self.tick_rate)
 
-                pygame.display.flip()
-                clock.tick(30)  # Adjust the frame rate if needed
-
-            pygame.quit()
+    def render(self, render_mode="none"):
+        self.render_mode = render_mode
+        if self.render_mode == "human":
+            pygame.init()
+            self.clock = pygame.time.Clock()
+            self.screen_width = self.board.width * 30
+            self.screen_height = self.board.height * 30
+            self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+            self.screen.fill((0, 0, 0))
+            pygame.display.set_caption("Tetris")
         elif render_mode == 'terminal':
             print(self.get_state())
 
