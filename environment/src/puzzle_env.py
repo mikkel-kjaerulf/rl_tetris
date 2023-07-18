@@ -105,6 +105,9 @@ class Board():
             if pos[0] >= self.height or pos[0] < 0 or pos[1] >= self.width or pos[1] < 0 or self.field[pos[0], pos[1]] == 1:
                 return True
         return False
+    
+    def __get_locked_positions__(self):
+        return self.locked_positions
 
     def new_piece(self) -> bool:
         self.active_piece = PuzzlePiece()
@@ -131,8 +134,8 @@ class Board():
             new_lines = np.zeros((len(full_lines), self.width))
             self.field = np.concatenate((new_lines, self.field), axis=0)
             self.locked_positions = [(pos[0] - len(full_lines), pos[1]) for pos in self.locked_positions if pos[0] not in full_lines]
-
-        return len(full_lines) / self.width
+        
+        return len(full_lines)
     
     @property
     def State(self):
@@ -172,6 +175,7 @@ class PuzzleEnv(gym.Env):
             self.board.lock_active_piece()
             step_reward += 1
             if self.board.new_piece() == False:
+                step_reward += len(self.board.__get_locked_positions__())
                 self.done = True
         self.__render__()
         step_reward += math.pow(10, self.board.check_and_collapse_lines())
