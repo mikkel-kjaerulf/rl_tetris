@@ -21,14 +21,12 @@ class Actions(Enum):
         RotateRight = 1
         MoveLeft = 2
         MoveRight = 3
-        MoveDown = 4
-        Nothing = 5
+        Nothing = 4
 
 
 class PuzzlePiece():
-    def __init__(self, seed=0):
+    def __init__(self):
         self.pos = (0,5)
-        random.seed(seed)
         self.shape = random.choice((
     np.array([[1, 1, 0],[0, 1, 1]]),
     np.array([[0, 1, 1],[1, 1, 0]]),
@@ -63,11 +61,10 @@ class PuzzlePiece():
 
 
 class Board():
-    def __init__(self, seed=0) -> None:
-        self.seed = seed
+    def __init__(self) -> None:
         self.height = 20
         self.width = 10
-        self.field = np.zeros((self.height,self.width))
+        self.field = np.zeros((self.height,self.width), dtype=np.int8)
         self.active_piece = PuzzlePiece()
         self.locked_positions = np.array([[0,0]])
         
@@ -105,12 +102,12 @@ class Board():
     def check_collision(self) -> bool:
         self.reset_board()
         for pos in self.active_piece.PositionShape:
-            if pos[0]>= self.height or pos[0] < 0 or pos[1] >= self.width or pos[1] < 0 or self.field[pos[0], pos[1]] == 1:
+            if pos[0] >= self.height or pos[0] < 0 or pos[1] >= self.width or pos[1] < 0 or self.field[pos[0], pos[1]] == 1:
                 return True
         return False
 
     def new_piece(self) -> bool:
-        self.active_piece = PuzzlePiece(self.seed)
+        self.active_piece = PuzzlePiece()
         return not self.check_collision()
 
     def place_active_piece(self):
@@ -118,7 +115,7 @@ class Board():
             self.field[pos[0], pos[1]] = 1
 
     def reset_board(self):
-        self.field = np.zeros((20,10))
+        self.field = np.zeros((self.height,self.width), dtype=np.int8)
         for pos in self.locked_positions:
             self.field[pos[0], pos[1]] = 1
     
@@ -127,14 +124,14 @@ class Board():
         for i in range(self.height):
             if np.all(self.field[i, :] == 1):
                 full_lines.append(i)
-
+    
         if full_lines:
             # Remove the full lines and shift the upper lines down
             self.field = np.delete(self.field, full_lines, axis=0)
             new_lines = np.zeros((len(full_lines), self.width))
             self.field = np.concatenate((new_lines, self.field), axis=0)
-            self.locked_positions = [(pos[0] + len(full_lines), pos[1]) for pos in self.locked_positions]
-        
+            self.locked_positions = [(pos[0] - len(full_lines), pos[1]) for pos in self.locked_positions if pos[0] not in full_lines]
+
         return len(full_lines) / self.width
     
     @property
@@ -146,16 +143,16 @@ class PuzzleEnv(gym.Env):
     def __init__(self):
         # action space 
         # rotate left | rotate right | move left | move right | move down | throw 
-        self.action_space = Discrete(6)
+        self.action_space = Discrete(5)
         self.observation_space = Box(0,1, shape=(20, 10), dtype=np.int8)
-        self.board = Board()
+        self.board = Board()  # seed is not used
         self.done = False
         self.tick_rate = 60
     
-    def reset(self, seed : int):
+    def reset(self, **kwargs):
         self.done = False
         self.board = Board()
-        return self.get_state()
+        return (self.__get_observation__(), {})
     
     def step(self, action):
         self.done = False
@@ -168,6 +165,8 @@ class PuzzleEnv(gym.Env):
             self.board.rotate('left')
         if (action == Actions.RotateRight.value):
             self.board.rotate('right')
+        if (action == Actions.Nothing.value):
+            pass
         self.__render__()
         if self.board.move('down') == False:
             self.board.lock_active_piece()
@@ -176,9 +175,9 @@ class PuzzleEnv(gym.Env):
                 self.done = True
         self.__render__()
         step_reward += math.pow(10, self.board.check_and_collapse_lines())
-        observation = self.get_state()
+        observation = self.__get_observation__()
 
-        return observation, step_reward, self.done, {"Step Reward": step_reward}
+        return (observation, step_reward, self.done, False, {"Step Reward": step_reward})
 
     def __render__(self):
         if self.render_mode == "human":
@@ -189,6 +188,8 @@ class PuzzleEnv(gym.Env):
                             pygame.draw.rect(self.screen, (255, 255, 255), (j * 30, i * 30, 30, 30))
             pygame.display.flip()
             self.clock.tick(self.tick_rate)
+        elif self.render_mode == "terminal":
+            print(self.__get_observation__())
 
     def render(self, render_mode="none"):
         self.render_mode = render_mode
@@ -200,10 +201,11 @@ class PuzzleEnv(gym.Env):
             self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
             self.screen.fill((0, 0, 0))
             pygame.display.set_caption("Tetris")
-        elif render_mode == 'terminal':
-            print(self.get_state())
+        
+    def close(self):
+        pygame.quit()
 
-    def get_state(self):
+    def __get_observation__(self):
         return self.board.field
 
 
