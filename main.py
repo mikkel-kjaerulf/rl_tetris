@@ -2,7 +2,7 @@
 import os 
 
 # environment
-from environment.src.puzzle_env import PuzzleEnv
+from environment.puzzle_env import PuzzleEnv
 
 # stable baselines
 import gymnasium as gym 
