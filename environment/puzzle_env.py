@@ -72,7 +72,6 @@ class Board():
         
     def lock_active_piece(self):
         self.locked_positions = np.concatenate((self.locked_positions,self.active_piece.PositionShape))
-        self.new_piece()
     
     def move(self, dir) -> bool:
         move_allowed = True
@@ -135,7 +134,7 @@ class Board():
             self.field = np.delete(self.field, full_lines, axis=0)
             new_lines = np.zeros((len(full_lines), self.width))
             self.field = np.concatenate((new_lines, self.field), axis=0)
-            self.locked_positions = [(pos[0] - len(full_lines), pos[1]) for pos in self.locked_positions if pos[0] not in full_lines]
+            self.locked_positions = np.array([(pos[0] - len(full_lines), pos[1]) for pos in self.locked_positions if pos[0] not in full_lines])
         
         return len(full_lines)
     
@@ -152,7 +151,7 @@ class PuzzleEnv(gym.Env):
         self.observation_space = Box(0,1, shape=(20, 10), dtype=np.int8)
         self.board = Board()  # seed is not used
         self.done = False
-        self.tick_rate = 60
+        self.tick_rate = 30
     
     def reset(self, **kwargs):
         self.done = False
@@ -174,13 +173,17 @@ class PuzzleEnv(gym.Env):
             pass
         self.__render__()
         if self.board.move('down') == False:
+            step_reward += 10
             self.board.lock_active_piece()
-            step_reward += self.__calculate_reward__()
+            step_reward -= self.__calculate_fit__()
+            step_reward -= self.__calculate_height__()
             if self.board.new_piece() == False:
                 #step_reward += len(self.board.__get_locked_positions__())
                 self.done = True
         self.__render__()
         step_reward += math.pow(10, self.board.check_and_collapse_lines()) - 1
+        if (self.render_mode == "human"):
+            print("step_reward: ", step_reward)
         observation = self.__get_observation__()
 
         return (observation, step_reward, self.done, False, {"Step Reward": step_reward})
@@ -189,6 +192,7 @@ class PuzzleEnv(gym.Env):
         # TODO create reward function that takes into account:
         # aggregate height: building flat is better
         # completed lines: sort of already fixed
+            # maybe something like how big a percentage a line has been cleared?
         # holes: a bit like the below functions
         # bumpiness: sort of like building flat
         y_max = np.max(self.board.__get_locked_positions__()[:,0])
@@ -198,6 +202,24 @@ class PuzzleEnv(gym.Env):
         x_max = self.board.width -1
         x_min = 0
         return (len(self.board.__get_locked_positions__())/((y_max - y_min + 1) * (x_max - x_min + 1)))
+    
+    def __calculate_height__(self):
+        # In progress
+        return np.min(self.board.active_piece.PositionShape[:,0]) - self.board.height
+
+    
+    def __calculate_fit__(self) -> int:
+        holes = 0
+        for pos in self.board.active_piece.PositionShape:
+            x = pos[1]
+            for y in range (pos[0] + 1, self.board.height):
+                if [y, x] in self.board.__get_locked_positions__().tolist():
+                    break
+                if self.board.field[y, x] == 0:
+                    holes += 1
+        if self.render_mode == "human":
+            print("holes: ", holes)
+        return holes
 
     def __render__(self):
         if self.render_mode == "human":
