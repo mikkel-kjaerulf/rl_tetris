@@ -205,7 +205,7 @@ class PuzzleEnv(gym.Env):
     
     def __calculate_height__(self):
         # In progress
-        return np.min(self.board.active_piece.PositionShape[:,0]) - self.board.height
+        return self.board.height - np.min(self.board.active_piece.PositionShape[:,0])
 
     
     def __calculate_fit__(self) -> int:
