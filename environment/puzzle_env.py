@@ -33,7 +33,9 @@ class PuzzlePiece():
     np.array([[0, 1],[0 ,1],[1, 1]]),
     np.array([[1, 0],[1, 0],[1, 1]]),
     np.array([[1, 1, 1], [0, 1, 0]]),
-    np.array([[1, 1], [1, 1]])))
+    np.array([[1, 1], [1, 1]]),
+    np.array([[1, 0], [1, 0], [1, 0]])
+    ))
         self.__updatePositionShape__()
 
     def __updatePositionShape__(self):
@@ -173,15 +175,29 @@ class PuzzleEnv(gym.Env):
         self.__render__()
         if self.board.move('down') == False:
             self.board.lock_active_piece()
-            step_reward += 1
+            step_reward += self.__calculate_reward__()
             if self.board.new_piece() == False:
-                step_reward += len(self.board.__get_locked_positions__())
+                #step_reward += len(self.board.__get_locked_positions__())
                 self.done = True
         self.__render__()
-        step_reward += math.pow(10, self.board.check_and_collapse_lines())
+        step_reward += math.pow(10, self.board.check_and_collapse_lines()) - 1
         observation = self.__get_observation__()
 
         return (observation, step_reward, self.done, False, {"Step Reward": step_reward})
+    
+    def __calculate_reward__(self):
+        # TODO create reward function that takes into account:
+        # aggregate height: building flat is better
+        # completed lines: sort of already fixed
+        # holes: a bit like the below functions
+        # bumpiness: sort of like building flat
+        y_max = np.max(self.board.__get_locked_positions__()[:,0])
+        y_min = np.min(self.board.__get_locked_positions__()[:,0])
+        #x_max = np.max(self.board.__get_locked_positions__()[:,1])
+        #x_min = np.min(self.board.__get_locked_positions__()[:,1])
+        x_max = self.board.width -1
+        x_min = 0
+        return (len(self.board.__get_locked_positions__())/((y_max - y_min + 1) * (x_max - x_min + 1)))
 
     def __render__(self):
         if self.render_mode == "human":
