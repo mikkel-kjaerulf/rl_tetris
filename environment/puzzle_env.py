@@ -148,7 +148,7 @@ class PuzzleEnv(gym.Env):
         # action space 
         # rotate left | rotate right | move left | move right | move down | throw 
         self.action_space = Discrete(5)
-        self.observation_space = Box(0,1, shape=(20, 10), dtype=np.int8)
+        self.observation_space = Box(low=0,high=1, shape=(20, 10), dtype=np.int8)
         self.board = Board()  # seed is not used
         self.done = False
         self.tick_rate = 30
@@ -161,6 +161,8 @@ class PuzzleEnv(gym.Env):
     def step(self, action):
         self.done = False
         step_reward = 0
+        if self.render_mode == "human":
+                print("-----")
         if (action == Actions.MoveRight.value):
             self.board.move('right')
         if (action == Actions.MoveLeft.value):
@@ -175,15 +177,19 @@ class PuzzleEnv(gym.Env):
         if self.board.move('down') == False:
             step_reward += 10
             self.board.lock_active_piece()
-            step_reward -= self.__calculate_fit__()
-            step_reward -= self.__calculate_height__()
+            step_reward -= self.__calculate_holes__()
+            if self.render_mode == "human":
+                print("step_reward after fit: ", step_reward)
+            step_reward -= self.__calculate_aggregate_height__()
+            if self.render_mode == "human":
+                print("step_reward after height: ", step_reward)
             if self.board.new_piece() == False:
                 #step_reward += len(self.board.__get_locked_positions__())
                 self.done = True
         self.__render__()
         step_reward += math.pow(10, self.board.check_and_collapse_lines()) - 1
-        if (self.render_mode == "human"):
-            print("step_reward: ", step_reward)
+        if (self.render_mode == "human" and not step_reward == 0):
+            print("final step_reward: ", step_reward)
         observation = self.__get_observation__()
 
         return (observation, step_reward, self.done, False, {"Step Reward": step_reward})
@@ -203,12 +209,24 @@ class PuzzleEnv(gym.Env):
         x_min = 0
         return (len(self.board.__get_locked_positions__())/((y_max - y_min + 1) * (x_max - x_min + 1)))
     
-    def __calculate_height__(self):
-        # In progress
-        return self.board.height - np.min(self.board.active_piece.PositionShape[:,0])
+    #def __calculate_percentage_of_completed_lines__(self):
+    #    for x in 
 
     
-    def __calculate_fit__(self) -> int:
+    def __calculate_aggregate_height__(self):
+        """
+        Agg_height = Te sum of the height of all columns
+        """
+        agg_height = 0
+        for x in range(0, self.board.width):
+            agg_height += np.min(self.board.__get_locked_positions__()[:,0])
+        return agg_height
+
+    
+    def __calculate_holes__(self) -> int:
+        """
+        A hole is defined as en empty space with a non-empty space above it
+        """
         holes = 0
         for pos in self.board.active_piece.PositionShape:
             x = pos[1]
