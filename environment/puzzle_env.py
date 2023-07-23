@@ -145,7 +145,12 @@ class Board():
             return 0
         
     def __set_field__(self, field):
+        """
+        Used for testing purposes
+        """
         self.field = field
+        self.locked_positions = np.argwhere(field == 1)
+
 
     @property
     def State(self):
