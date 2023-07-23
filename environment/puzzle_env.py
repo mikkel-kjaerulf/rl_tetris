@@ -140,10 +140,12 @@ class Board():
     
     def __get_column_height__(self, i):
         if i in self.__get_locked_positions__()[: , 1]:
-            return min([ pos[0] for pos in self.__get_locked_positions__() if (pos[1] == i)])
+            return self.height -  min([ pos[0] for pos in self.__get_locked_positions__() if (pos[1] == i)])
         else: 
             return 0
-
+        
+    def __set_field__(self, field):
+        self.field = field
 
     @property
     def State(self):
@@ -252,7 +254,7 @@ class PuzzleEnv(gym.Env):
         """
         bumpiness = 0
         for x in range(0, self.board.width - 1):
-            bumpiness += abs(self.board.__get_column_height__(x) + self.board.__get_column_height__(x+1))
+            bumpiness += abs(self.board.__get_column_height__(x) - self.board.__get_column_height__(x+1))
         return bumpiness
 
     def __render__(self):
