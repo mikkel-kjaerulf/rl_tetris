@@ -138,9 +138,18 @@ class Board():
         
         return len(full_lines)
     
+    def __get_column_height__(self, i):
+        if i in self.__get_locked_positions__()[: , 1]:
+            return min([ pos[0] for pos in self.__get_locked_positions__() if (pos[1] == i)])
+        else: 
+            return 0
+
+
     @property
     def State(self):
         return self.field
+    
+
 
 class PuzzleEnv(gym.Env):
 
@@ -178,11 +187,8 @@ class PuzzleEnv(gym.Env):
             step_reward += 10
             self.board.lock_active_piece()
             step_reward -= self.__calculate_holes__()
-            if self.render_mode == "human":
-                print("step_reward after fit: ", step_reward)
             step_reward -= self.__calculate_aggregate_height__()
-            if self.render_mode == "human":
-                print("step_reward after height: ", step_reward)
+            step_reward -= self.__calculate_bumpiness__()
             if self.board.new_piece() == False:
                 #step_reward += len(self.board.__get_locked_positions__())
                 self.done = True
@@ -215,16 +221,17 @@ class PuzzleEnv(gym.Env):
     
     def __calculate_aggregate_height__(self):
         """
-        Agg_height = Te sum of the height of all columns
+        Agg_height = The sum of the height of all columns
         """
         agg_height = 0
         for x in range(0, self.board.width):
-            agg_height += np.min(self.board.__get_locked_positions__()[:,0])
+            agg_height += self.board.__get_column_height__(x)
         return agg_height
 
     
     def __calculate_holes__(self) -> int:
         """
+        CAN POSSIBLY BE ALTERED
         A hole is defined as en empty space with a non-empty space above it
         """
         holes = 0
@@ -238,6 +245,15 @@ class PuzzleEnv(gym.Env):
         if self.render_mode == "human":
             print("holes: ", holes)
         return holes
+    
+    def __calculate_bumpiness__(self) -> int:
+        """
+        Sum of absolute differences between height of two adjacent columns
+        """
+        bumpiness = 0
+        for x in range(0, self.board.width - 1):
+            bumpiness += abs(self.board.__get_column_height__(x) + self.board.__get_column_height__(x+1))
+        return bumpiness
 
     def __render__(self):
         if self.render_mode == "human":
