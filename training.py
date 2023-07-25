@@ -21,7 +21,7 @@ check_env(env=env, warn=True, skip_render_check=True)
 model = PPO('MlpPolicy', env, verbose=1, tensorboard_log=log_path)
 
 print("training...")
-model.learn(total_timesteps=200000)
+model.learn(total_timesteps=1000000)
 
 env.close()
 

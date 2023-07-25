@@ -194,7 +194,6 @@ class PuzzleEnv(gym.Env):
             step_reward += 10
             self.board.lock_active_piece()
             step_reward -= self.__calculate_holes__()
-            step_reward -= self.__calculate_aggregate_height__()
             step_reward -= self.__calculate_bumpiness__()
             if self.board.new_piece() == False:
                 #step_reward += len(self.board.__get_locked_positions__())
