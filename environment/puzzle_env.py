@@ -199,7 +199,6 @@ class PuzzleEnv(gym.Env):
                 #step_reward += len(self.board.__get_locked_positions__())
                 self.done = True
         self.__render__()
-        step_reward += math.pow(10, self.board.check_and_collapse_lines()) - 1
         if (self.render_mode == "human" and not step_reward == 0):
             print("final step_reward: ", step_reward)
         observation = self.__get_observation__()
@@ -213,18 +212,12 @@ class PuzzleEnv(gym.Env):
             # maybe something like how big a percentage a line has been cleared?
         # holes: a bit like the below functions
         # bumpiness: sort of like building flat
-        y_max = np.max(self.board.__get_locked_positions__()[:,0])
-        y_min = np.min(self.board.__get_locked_positions__()[:,0])
-        #x_max = np.max(self.board.__get_locked_positions__()[:,1])
-        #x_min = np.min(self.board.__get_locked_positions__()[:,1])
-        x_max = self.board.width -1
-        x_min = 0
-        return (len(self.board.__get_locked_positions__())/((y_max - y_min + 1) * (x_max - x_min + 1)))
+        return (self.__calculate__completed_lines__()  -self.__calculate_aggregate_height__() - self.__calculate_holes__() - self.__calculate_bumpiness__())
     
-    #def __calculate_percentage_of_completed_lines__(self):
-    #    for x in 
+    def __calculate__completed_lines__(self):
+        return math.pow(10, self.board.check_and_collapse_lines()) - 1
 
-    
+
     def __calculate_aggregate_height__(self):
         """
         Agg_height = The sum of the height of all columns
