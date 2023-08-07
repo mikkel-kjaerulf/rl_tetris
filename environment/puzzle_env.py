@@ -61,19 +61,20 @@ class PuzzlePiece():
     def Shape(self):
         return self.shape
 
-
 class Board():
     def __init__(self) -> None:
         self.height = 20
         self.width = 10
         self.field = np.zeros((self.height,self.width), dtype=np.int8)
-        self.active_piece = PuzzlePiece()
         self.locked_positions = np.array([[0,0]])
+        self.active_piece = PuzzlePiece()
+        self.shadow_piece = self.active_piece
+        self.update_shadow_piece()
         
     def lock_active_piece(self):
         self.locked_positions = np.concatenate((self.locked_positions,self.active_piece.PositionShape))
-    
-    def move(self, dir) -> bool:
+
+    def move(self, piece, dir) -> bool:
         move_allowed = True
         if dir == 'right':
             direction = (0, 1)
@@ -82,27 +83,40 @@ class Board():
         elif dir == 'down':
             direction = (1, 0)
         self.reset_board()
-        self.active_piece.__updatePosition__(tuple(map(lambda i, j: i + j, self.active_piece.Position, direction)))
-        if self.check_collision() == True:
-            self.active_piece.__updatePosition__(tuple(map(lambda i, j: i - j, self.active_piece.Position, direction)))
+        piece.__updatePosition__(tuple(map(lambda i, j: i + j, piece.Position, direction)))
+        if self.check_collision(piece) == True:
+            piece.__updatePosition__(tuple(map(lambda i, j: i - j, piece.Position, direction)))
             move_allowed = False
-        self.place_active_piece()
         return move_allowed
+    
+    def update_shadow_piece(self): 
+        self.reset_board()
+        self.shadow_piece = self.active_piece
+        move_allowed = True
+        while move_allowed:
+            move_allowed = self.move(self.shadow_piece, 'down')  
 
-    def rotate(self, dir):
+    def move_active_piece(self, dir) -> bool:
+        move_allowed = self.move(self.active_piece,dir)
+        self.update_shadow_piece()
+        self.place_piece(self.active_piece)
+        return move_allowed
+    
+    def rotate_active_piece(self, dir):
         self.reset_board()
         if dir == 'right':
             k = 1
         elif dir == 'left':
             k = 3
         self.active_piece.__setShape__(np.rot90(self.active_piece.Shape, k=k))
-        if self.check_collision() == True:
+        if self.check_collision(self.active_piece) == True:
             self.active_piece.__setShape__(np.rot90(self.active_piece.Shape, k=4-k))
-        self.place_active_piece()
+        self.update_shadow_piece()
+        self.place_piece(self.active_piece)
 
-    def check_collision(self) -> bool:
+    def check_collision(self, piece) -> bool:
         self.reset_board()
-        for pos in self.active_piece.PositionShape:
+        for pos in piece.PositionShape:
             if pos[0] >= self.height or pos[0] < 0 or pos[1] >= self.width or pos[1] < 0 or self.field[pos[0], pos[1]] == 1:
                 return True
         return False
@@ -112,10 +126,10 @@ class Board():
 
     def new_piece(self) -> bool:
         self.active_piece = PuzzlePiece()
-        return not self.check_collision()
-
-    def place_active_piece(self):
-        for pos in self.active_piece.PositionShape:
+        return not self.check_collision(self.active_piece)
+    
+    def place_piece(self, piece):
+        for pos in piece.PositionShape:
             self.field[pos[0], pos[1]] = 1
 
     def reset_board(self):
@@ -123,19 +137,21 @@ class Board():
         for pos in self.locked_positions:
             self.field[pos[0], pos[1]] = 1
     
-    def check_and_collapse_lines(self) -> int:
+    def check_lines(self):
+        self.place_piece(self.shadow_piece)
         full_lines = []
         for i in range(self.height):
             if np.all(self.field[i, :] == 1):
                 full_lines.append(i)
-    
-        if full_lines:
+        return full_lines
+
+    def collapse_lines(self) -> int:
+        if len((full_lines := self.check_lines())) > 0:
             # Remove the full lines and shift the upper lines down
             self.field = np.delete(self.field, full_lines, axis=0)
             new_lines = np.zeros((len(full_lines), self.width))
             self.field = np.concatenate((new_lines, self.field), axis=0)
             self.locked_positions = np.array([(pos[0] - len(full_lines), pos[1]) for pos in self.locked_positions if pos[0] not in full_lines])
-        
         return len(full_lines)
     
     def __get_column_height__(self, i):
@@ -151,12 +167,11 @@ class Board():
         self.field = field
         self.locked_positions = np.argwhere(field == 1)
 
-
     @property
     def State(self):
+        self.reset_board()
         return self.field
     
-
 
 class PuzzleEnv(gym.Env):
 
@@ -180,42 +195,36 @@ class PuzzleEnv(gym.Env):
         if self.render_mode == "human":
                 print("-----")
         if (action == Actions.MoveRight.value):
-            self.board.move('right')
+            self.board.move_active_piece('right')
         if (action == Actions.MoveLeft.value):
-            self.board.move('left')
+            self.board.move_active_piece('left')
         if (action == Actions.RotateLeft.value):
-            self.board.rotate('left')
+            self.board.rotate_active_piece('left')
         if (action == Actions.RotateRight.value):
-            self.board.rotate('right')
+            self.board.rotate_active_piece('right')
         if (action == Actions.Nothing.value):
             pass
         self.__render__()
-        if self.board.move('down') == False:
-            step_reward += 10
+        next_move = self.board.move_active_piece('down')
+        step_reward = self.__calculate_reward__()
+        if next_move == False:
             self.board.lock_active_piece()
-            step_reward -= self.__calculate_holes__()
-            step_reward -= self.__calculate_bumpiness__()
             if self.board.new_piece() == False:
-                #step_reward += len(self.board.__get_locked_positions__())
                 self.done = True
+        self.board.collapse_lines()
         self.__render__()
-        if (self.render_mode == "human" and not step_reward == 0):
-            print("final step_reward: ", step_reward)
+        if (self.render_mode == "human"):
+            print(self.__get_observation__())
+
         observation = self.__get_observation__()
 
         return (observation, step_reward, self.done, False, {"Step Reward": step_reward})
     
     def __calculate_reward__(self):
-        # TODO create reward function that takes into account:
-        # aggregate height: building flat is better
-        # completed lines: sort of already fixed
-            # maybe something like how big a percentage a line has been cleared?
-        # holes: a bit like the below functions
-        # bumpiness: sort of like building flat
         return (self.__calculate__completed_lines__()  -self.__calculate_aggregate_height__() - self.__calculate_holes__() - self.__calculate_bumpiness__())
     
     def __calculate__completed_lines__(self):
-        return math.pow(10, self.board.check_and_collapse_lines()) - 1
+        return math.pow(10, len(self.board.check_lines())) - 1
 
 
     def __calculate_aggregate_height__(self):

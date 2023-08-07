@@ -122,7 +122,7 @@ class TestTetris(unittest.TestCase):
                                           [1, 0, 0, 0, 0, 0, 1, 1, 1, 0],
                                           [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                                           [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]))
-        env.board.check_and_collapse_lines()
+        env.board.collapse_lines()
         assert(np.array_equal(env.board.field, np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                                                         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                                                         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -164,7 +164,7 @@ class TestTetris(unittest.TestCase):
                                           [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                                           [1, 0, 0, 0, 1, 1, 1, 1, 1, 1],
                                           [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]))
-        env.board.check_and_collapse_lines()
+        env.board.collapse_lines()
         assert(np.array_equal(env.board.field, np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                                                         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                                                         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
