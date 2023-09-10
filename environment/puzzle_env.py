@@ -169,7 +169,6 @@ class Board():
 
     @property
     def State(self):
-        self.reset_board()
         return self.field
     
 
